@@ -9,7 +9,6 @@
 
 module e300_io
     (
-     input 	  reset,
      input 	  mimo,
 
      // Baseband sample interface
@@ -258,7 +257,6 @@ module e300_io
 		   .Q1(rx_q[1]),
 		   .Q2(rx_i[1]),
 		   .C(io_clk),
-		   .C1(io_clk_lb_b),
 		   .CE(1'b1),
 		   .D(rx_data[1]),
 		   .R(1'b0),
@@ -636,7 +634,7 @@ module e300_io
 	begin : gen_pins
 	   ODDR #(
 		   .DDR_CLK_EDGE("SAME_EDGE"), .SRTYPE("ASYNC"))
-             oddr2 (
+             oddr (
 		    .Q(tx_data[z]), .C(io_clk),
 		    .CE(1'b1), .D1(tx_i[z]), .D2(tx_q[z]), .SR(1'b0));
 
