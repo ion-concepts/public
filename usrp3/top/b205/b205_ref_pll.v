@@ -12,7 +12,8 @@ module b205_ref_pll(
     // SPI lines to AD5662
     output sclk,
     output mosi,
-    output sync_n
+    output sync_n,
+		    output reg [3:0] debug
     );
 
     // Base parameters
@@ -69,6 +70,12 @@ module b205_ref_pll(
     wire ref_rising = (refsmp[3:2] == 2'b01);
     wire refclk_rising = (refclksmp[3:2] == 2'b01);
 
+   // IJB
+   //assign debug = {ref,refclk_div, r_rising, n_rising};
+   //ref_is_10M , ref_is_pps};
+   always @(*) debug[3:2] = {ref,refclk_div};
+   always @(posedge clk) debug [1:0] = {r_rising, n_rising};
+   
     // reference frequency detection
     reg [27:0] refcnt;
     reg ref_detected;

@@ -4,14 +4,19 @@
 
 # CAT_DATA_CLK is the data clock from AD9361, sample rate dependent with a max rate of 61.44 MHz
 set cat_data_clk_period             16.276;
-set cat_data_clk_duty_cycle_var     [expr $cat_data_clk_period * (0.55 - 0.45)];
+#set cat_data_clk_period             [expr 16.276 * 0.95]; # Simulating duty_cycle uncertainty.
+# set cat_data_clk_duty_cycle_var     [expr $cat_data_clk_period * (0.55 - 0.45)];
+set cat_data_clk_falling_min          [expr $cat_data_clk_period * 0.45]
+set cat_data_clk_falling_max          [expr $cat_data_clk_period * 0.55]
 set tcxo_jitter                     0.0005;     # Calculated from datasheet phase noise
-create_clock -period $cat_data_clk_period -name CAT_DATA_CLK [get_ports CAT_DATA_CLK]
+create_clock -period $cat_data_clk_period -name CAT_DATA_CLK [get_ports CAT_DATA_CLK] -waveform [list 0 $cat_data_clk_falling_min]
+create_clock -period $cat_data_clk_period -name CAT_DATA_CLK [get_ports CAT_DATA_CLK] -waveform [list 0 $cat_data_clk_falling_max] -add
 # Model variable duty cycle as jitter.
-set_input_jitter CAT_DATA_CLK [expr $cat_data_clk_duty_cycle_var + $tcxo_jitter]
+# set_input_jitter CAT_DATA_CLK [expr $cat_data_clk_duty_cycle_var + $tcxo_jitter]
+set_input_jitter CAT_DATA_CLK [expr $tcxo_jitter]
 
 # Generate DAC output clock
-create_generated_clock -name CAT_FB_CLK -multiply_by 1 -source [get_pins inst_catcodec_ddr_cmos/catgen/oddr_clk/C] [get_ports CAT_FB_CLK]
+create_generated_clock -name CAT_FB_CLK -multiply_by 1 -source [get_pins e300_io_i0/oddr_clk/C] [get_ports CAT_FB_CLK]
 
 # TCXO clock 40 MHz
 create_clock -period 25.000 -name TCXO_CLK [get_nets TCXO_CLK]
@@ -24,7 +29,6 @@ create_clock -period 100.000 -name GPS_PPS [get_nets GPS_PPS]
 # Asynchronous clock domains
 set_clock_groups -asynchronous \
   -group [get_clocks -include_generated_clocks CAT_DATA_CLK] \
-  -group [get_clocks -include_generated_clocks clk_fpga_0] \
   -group [get_clocks -include_generated_clocks *clk_50MHz_in] \
   -group [get_clocks -include_generated_clocks TCXO_CLK] \
   -group [get_clocks -include_generated_clocks PPS_EXT_IN] \
@@ -33,11 +37,11 @@ set_clock_groups -asynchronous \
 # Logically exclusive clocks in catcodec capture interface. These two clocks are the input to a BUFG mux that
 # drives radio_clk, meaning only one of the two can drive radio_clk at a time.
 set_clock_groups -logically_exclusive \
-  -group [get_clocks -include_generated_clocks {clk0}] \
-  -group [get_clocks -include_generated_clocks {clkdv}]
+  -group [get_clocks -include_generated_clocks {siso_clk}] \
+  -group [get_clocks -include_generated_clocks {mimo_clk}]
 
 # Setup ADC (AD9361) interface constraints.
-set cat_data_prog_dly               2.4;  # Programmable skew set to delay RX data by 2.4 ns
+set cat_data_prog_dly               4.5;  # Programmable skew set to delay RX data by 4.5 ns
 set cat_data_clk_to_data_out_min    0;
 set cat_data_clk_to_data_out_max    1.2;
 

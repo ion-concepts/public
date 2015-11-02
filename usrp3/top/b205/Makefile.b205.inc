@@ -60,6 +60,7 @@ b205_io.v \
 b205.ucf \
 timing.ucf \
 ../b200/S6CLK2PIN.v \
+../e300/ppsloop_ijb.v \
 $(B205_COREGEN_SRCS)
 
 SOURCES = $(abspath $(TOP_SRCS)) $(FIFO_SRCS) \

@@ -146,17 +146,46 @@ module b205 (
     wire ext_ref_is_pps;
     wire ext_ref_locked;
     wire ext_ref = ext_ref_is_pps ? PPS_IN : ref_sel ? CLKIN_10MHz : 1'b0;
-    b205_ref_pll ref_pll
-    (
-        .reset(ref_pll_rst),
-        .clk(ref_pll_clk),
-        .refclk(int_40mhz),
-        .ref(ext_ref),
-        .locked(ext_ref_locked),
-        .sclk(CLK_40M_DAC_SCLK),
-        .mosi(CLK_40M_DAC_DIN),
-        .sync_n(CLK_40M_DAC_nSYNC)
-    );
+   //IJB
+   wire [3:0] debug_pll;
+`define E300_PLL
+`ifndef E300_PLL
+   b205_ref_pll ref_pll
+     (
+      .reset(ref_pll_rst),
+      .clk(ref_pll_clk),
+      .refclk(int_40mhz),
+      .ref(ext_ref),
+      .locked(ext_ref_locked),
+      .sclk(CLK_40M_DAC_SCLK),
+      .mosi(CLK_40M_DAC_DIN),
+      .sync_n(CLK_40M_DAC_nSYNC),
+      .debug(debug_pll)
+      );
+   `else
+      
+
+     ppsloop_ijb ref_pll(
+			 .reset(ref_pll_rst),
+			 .xoclk(int_40mhz), // 40 MHz from VCTCXO
+			 .clk_200M_o(ref_pll_clk),
+			 .ppsgps(1'b0),
+		//	 .ppsext(ext_ref),
+			 .ppsext(PPS_IN),
+			 .refsel(2'b11),
+			 .lpps(),
+			.is10meg(),
+			 .ispps(),
+			 .reflck(ext_ref_locked),
+			 .plllck(),// status of things
+			 .sclk(CLK_40M_DAC_SCLK),
+			 .mosi(CLK_40M_DAC_DIN),
+			 .sync_n(CLK_40M_DAC_nSYNC),
+			 .dac_dflt(32'd32768),
+			 .debug(debug_pll)
+			 );
+`endif //  `ifndef E300_PLL
+   
     assign CLKIN_10MHz_REQ = ref_sel;
 
    ///////////////////////////////////////////////////////////////////////
@@ -266,9 +295,13 @@ module b205 (
 
         .debug()
     );
+   //IJB
+   wire [3:0]  discard;
+   assign      fp_gpio[7:4] = debug_pll[3:0];
+   
 
     gpio_atr_io #(.WIDTH(8)) gpio_atr_io_inst (
-        .clk(radio_clk), .gpio_pins(fp_gpio),
+        .clk(radio_clk), .gpio_pins({discard[3:0],fp_gpio[3:0]}),
         .gpio_ddr(fp_gpio_ddr), .gpio_out(fp_gpio_out), .gpio_in(fp_gpio_in)
     );
 

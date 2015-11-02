@@ -35,27 +35,28 @@ module e300_io
    genvar 	   z;
 
    //------------------------------------------------------------------
-   //
-   // Synchronize MIMO signal from bus_clk to siso_clk.
-   //
-   //------------------------------------------------------------------
-   reg 		   mimo_sync, mimo_sync2;
-
-   always @(posedge siso_clk) begin
-      mimo_sync <= mimo_sync2;
-      mimo_sync2 <= mimo;
-   end
-
-
-   //------------------------------------------------------------------
    // Clock Buffering.
    // BUFIO2 drives all IDDR2 and ODDR2 cells directly in bank3.
    // Need two pairs of BUFIO2 one pair each for Top Left and Bottom Left half banks.
    //------------------------------------------------------------------
    wire 			rx_clk_buf;
-   wire 			mimo_clk_unbuf;
-   wire 			siso_clk_unbuf;
-   wire 			siso2_clk_unbuf;
+   wire 			mimo_clk;
+   wire 			siso_clk;
+   wire 			siso_clk2;
+   
+   //------------------------------------------------------------------
+   //
+   // Synchronize MIMO signal from bus_clk to siso2_clk.
+   //
+   //------------------------------------------------------------------
+   reg 		   mimo_sync, mimo_sync2;
+
+   always @(posedge siso_clk2) begin
+      mimo_sync <= mimo_sync2;
+      mimo_sync2 <= mimo;
+   end
+
+
 
    IBUFG clk_ibufg (.O(rx_clk_buf), .I(rx_clk));
    
@@ -74,6 +75,8 @@ module e300_io
    //------------------------------------------------------------------
    //
    // Buffer that creates SISO logic clock
+   // There are 2 clocks so that we can make a constraint that defines an
+   // exclusive clock group for siso_clk and mimo_clk.
    // BUFR_
    //
    //------------------------------------------------------------------
@@ -83,6 +86,16 @@ module e300_io
        (
 	.I(rx_clk_buf),
 	.O(siso_clk),
+	.CE(1'b1),
+	.CLR(1'b0)
+	);
+
+   BUFR #(
+	  .BUFR_DIVIDE(1))
+     clk_bufr_siso2
+       (
+	.I(rx_clk_buf),
+	.O(siso_clk2),
 	.CE(1'b1),
 	.CLR(1'b0)
 	);
@@ -227,7 +240,7 @@ module e300_io
 
  -----/\----- EXCLUDED -----/\----- */
    reg rx_frame_d1, rx_frame_d2;
-   always @(posedge siso_clk)
+   always @(posedge siso_clk2)
      if(~mimo_sync)
        { rx_frame_d2, rx_frame_d1 } <= { rx_frame_1, 1'b0 };
      else
@@ -568,7 +581,7 @@ module e300_io
    reg [11:0] rx_q1_siso;
 
 
-   always @(negedge siso_clk)
+   always @(negedge siso_clk2)
      if(mimo_sync)
        // rx_frame_0 was sampled by same falling io_clk edge as rx_i[x]
        // rx_frame_0 == 0 causes I & Q to be allocated to CH0
@@ -600,7 +613,7 @@ module e300_io
    //
    //------------------------------------------------------------------
    // This code lock only relevent in MIMO mode.
-   always @(negedge siso_clk)
+   always @(negedge siso_clk2)
      if (tx_strobe)
        begin
 	  rx_i0_siso_neg[11:0] <= rx_i0_siso[11:0];
@@ -609,7 +622,7 @@ module e300_io
 	  rx_q1_siso_neg[11:0] <= rx_q1_siso[11:0];
        end
    // This code block only relevent in SISO mode.
-   always @(posedge siso_clk)
+   always @(posedge siso_clk2)
      begin
 	rx_i0_siso_pos[11:0] <= rx_i0_siso[11:0];
 	rx_q0_siso_pos[11:0] <= rx_q0_siso[11:0];
@@ -636,7 +649,7 @@ module e300_io
 		   .DDR_CLK_EDGE("SAME_EDGE"), .SRTYPE("ASYNC"))
              oddr (
 		    .Q(tx_data[z]), .C(io_clk),
-		    .CE(1'b1), .D1(tx_i[z]), .D2(tx_q[z]), .SR(1'b0));
+		    .CE(1'b1), .D1(tx_i[z]), .D2(tx_q[z]), .R(1'b0), .S(1'b0));
 
 /* -----\/----- EXCLUDED -----\/-----
            ODDR2 #(
@@ -662,7 +675,7 @@ module e300_io
            .DDR_CLK_EDGE("SAME_EDGE"), .SRTYPE("ASYNC"))
      oddr_frame (
 		  .Q(tx_frame), .C(io_clk),
-		  .CE(1'b1), .D1(tx_strobe_del), .D2(mimo_sync & tx_strobe_del), .SR(1'b0));
+		  .CE(1'b1), .D1(tx_strobe_del), .D2(mimo_sync & tx_strobe_del), .R(1'b0), .S(1'b0));
  
    //------------------------------------------------------------------
    // TX Clock Signal - In bank 3 LB
@@ -678,7 +691,7 @@ module e300_io
          .DDR_CLK_EDGE("SAME_EDGE"), .SRTYPE("ASYNC"))
      oddr_clk (
 	       .Q(tx_clk), .C(io_clk),
-	       .CE(1'b1), .D1(1'b1), .D2(1'b0), .SR(1'b0));
+	       .CE(1'b1), .D1(1'b1), .D2(1'b0), .R(1'b0), .S(1'b0));
 
    //------------------------------------------------------------------
    //
@@ -700,7 +713,7 @@ module e300_io
 
    assign     tx_strobe = mimo_sync ? (find_radio_clk_phase_del ^ find_radio_clk_phase) : 1'b1;
 
-   always @(posedge siso_clk)
+   always @(posedge siso_clk2)
      tx_strobe_del <= tx_strobe;
 
    // This strange piece of logic allows either USRP DUC to drive the AD9361 in SISO mode.
@@ -711,7 +724,7 @@ module e300_io
 
    // Deal with the fact that Ch A and Ch B are labelled in silkscreen opposite to their documentation in AD9361.
    // (Except on B200 based on AD9364 where only the true Ch A is stuffed)
-   always @(posedge siso_clk)
+   always @(posedge siso_clk2)
      if(tx_strobe)
        begin
 	  {tx_i,tx_q} <= mimo_sync ? {tx_i1,tx_q1} : {tx_im,tx_qm};
