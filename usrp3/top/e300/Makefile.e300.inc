@@ -36,6 +36,7 @@ TOP_SRCS = e300_ps.v \
            ppsloop.v \
            spi_slave.v \
            axi_pmu.v \
+           e300_io.v \
            e300.xdc \
            timing.xdc
 

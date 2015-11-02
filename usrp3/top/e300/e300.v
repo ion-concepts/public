@@ -482,6 +482,7 @@ module e300
   wire mimo;
   wire codec_arst;
   wire [31:0] rx_data0, rx_data1, tx_data0, tx_data1;
+/* -----\/----- EXCLUDED -----\/-----
 
   catcodec_ddr_cmos #(
     .DEVICE("7SERIES"))
@@ -499,7 +500,34 @@ module e300
     .tx_clk(CAT_FB_CLK),
     .tx_frame(CAT_TX_FRAME),
     .tx_d(CAT_P1_D));
+ -----/\----- EXCLUDED -----/\----- */
+   e300_io e300_io_i0
+     (
+      .mimo(mimo),
 
+      // Baseband sample interface
+      .radio_clk(radio_clk),
+      .rx_i0(rx_data0[31:20]), 
+      .rx_q0(rx_data0[15:4]), 
+      .rx_i1(rx_data1[31:20]), 
+      .rx_q1(rx_data1[15:4]),
+      
+      .tx_i0(tx_data0[31:20]), 
+      .tx_q0(tx_data0[15:4]), 
+      .tx_i1(tx_data1[31:20]), 
+      .tx_q1(tx_data1[15:4]),
+      
+      // Catalina interface
+      .rx_clk(CAT_DATA_CLK),
+      .rx_frame(CAT_RX_FRAME),
+      .rx_data(CAT_P0_D),
+      .tx_clk(CAT_FB_CLK),
+      .tx_frame(CAT_TX_FRAME),
+      .tx_data(CAT_P1_D)
+      );
+   
+   assign     {rx_data0[19:16],rx_data0[3:0],rx_data1[19:16],rx_data1[3:0]} = 16'h0;
+   
   assign CAT_CTRL_IN = 4'b1;
   assign CAT_ENAGC = 1'b1;
   assign CAT_TXNRX = 1'b1;
