@@ -2,7 +2,16 @@
 // Copyright 2015 Ettus Research
 //
 
-module b205_ref_pll(
+//
+// IJB.
+// This is a modified version of the B200mini DPLL.
+
+// Define this with scaling value for P term of  error correction loop.
+// A value of "1" proved optimal in testing @ Versperix.
+`define FINE_ERROR_SCALE 1
+
+
+module e300_ref_pll(
     input reset,
     input clk,      // 200 MHz sample clock
     input refclk,   // 40 MHz reference clock
@@ -127,7 +136,11 @@ module b205_ref_pll(
     end
 
     // Frequency Counter
-    wire signed [28:0] period = ref_is_10M ? PFD_PERIOD_10MHZ : PFD_PERIOD_PPS;
+   
+   reg signed [28:0] period;
+   always @(posedge clk)
+     period  <= ref_is_10M ? PFD_PERIOD_10MHZ : PFD_PERIOD_PPS;
+   
     reg signed [28:0] r_period_cnt;
     reg signed [28:0] freq_err;
     always @(posedge clk) begin
@@ -174,17 +187,20 @@ module b205_ref_pll(
 	 end
 
     // PFD State Machine
-    localparam MEASURE=3'd0;
-    localparam CAPTURE=3'd1;
-    localparam CALCULATE_ERROR=3'd2;
-//	 localparam CALCULATE_10M_GAIN=3'd3;
-   localparam CALCULATE_FILTERED_ADJ=3'd3;
-    localparam CALCULATE_ADJUSTMENT=3'd4;
-    localparam CALCULATE_OUTPUT_VALUE=3'd5;
-    localparam APPLY_OUTPUT_VALUE=3'd6;
-   localparam ARE_WE_LOCKED = 3'd7;
+    localparam MEASURE=4'd0;
+    localparam CAPTURE=4'd1;
+    localparam CALCULATE_ERROR=4'd2;
+//	 localparam CALCULATE_10M_GAIN=4'd3;
+   localparam CALCULATE_FILTERED_ADJ=4'd3;
+    localparam CALCULATE_ADJUSTMENT=4'd4;
+    localparam CALCULATE_OUTPUT_VALUE=4'd5;
+    localparam APPLY_OUTPUT_VALUE=4'd6;
+   localparam ARE_WE_LOCKED = 4'd7;
+   localparam CAPTURE2 = 4'd8;
+   localparam CAPTURE3 = 4'd9;
    
-    reg [2:0] state;
+   
+    reg [3:0] state;
     reg [15:0] daco = 16'd32767;
     wire signed [28:0] lock_margin = ref_is_10M ? LOCK_MARGIN_10MHZ : LOCK_MARGIN_PPS;
     wire signed [28:0] lag = lead + period;
@@ -229,16 +245,26 @@ module b205_ref_pll(
                         state <= CAPTURE;
                 end
                 CAPTURE: begin
-					     if (lag < -lead) begin
-						      phase_err <= lag;
-								ld <= {ld[1:0], (lag <= lock_margin)};
+		    if (((lead <<< 1) + period) < 0) begin
+		       state <= CAPTURE2;
                     end
-						  else begin
-						      phase_err <= lead;
-								ld <= {ld[1:0], (-lead <= lock_margin)};
-						  end
-                    state <= CALCULATE_ERROR;
-                end
+		    else begin
+		      state <= CAPTURE3;
+		    end
+                end // case: CAPTURE
+	      
+	      CAPTURE2: begin
+		 phase_err <= lag;
+		 ld <= {ld[1:0], (lag <= lock_margin)};
+		 state <= CALCULATE_ERROR;
+	      end
+
+	      CAPTURE3: begin
+		 phase_err <= lead;
+		 ld <= {ld[1:0], (-lead <= lock_margin)};
+		 state <= CALCULATE_ERROR;
+	      end
+	      
 /* -----\/----- EXCLUDED -----\/-----
                 CALCULATE_ERROR: begin
                     err <= phase_err + freq_err;
@@ -279,16 +305,19 @@ module b205_ref_pll(
 				(err_history3 <<< 2) +
 				err[7:0]);
  -----/\----- EXCLUDED -----/\----- */
+/* -----\/----- EXCLUDED -----\/-----
 		  avrg_error[7:0] <= ({{2{err_history0[7]}},err_history0[7:0]} + 
 				({err_history1[7:0],2'b00}) + 
 				({err_history2[7:0],2'b00}) + 
 				({err_history2[7],err_history2[7:0],1'b0}) + 
 				({{2{err_history3[7]}},err_history3[7:0]}) +
 				{err[7],err[7],err[7:0]});
+ -----/\----- EXCLUDED -----/\----- */
                  state <= CALCULATE_FILTERED_ADJ ;
               end
 	      
                CALCULATE_FILTERED_ADJ : begin
+/* -----\/----- EXCLUDED -----\/-----
 		  if (lock_test == 4'hF) begin
 		     // 1,4,6,4,1 low pass filter
 		     //err[28:0] <= {{25{avrg_error[7]}},avrg_error[7:4]};
@@ -304,6 +333,7 @@ module b205_ref_pll(
 		     err_history1 <= err_history2;
 		     err_history0 <= err_history1;
 		  end
+ -----/\----- EXCLUDED -----/\----- */
 		  state <= CALCULATE_ADJUSTMENT;
 		  
 		  end
@@ -317,7 +347,7 @@ module b205_ref_pll(
 						  if (ref_is_10M)
 						      adj <= (err <<< shift);
 						  else if (lock_test == 4'hF)
-						    adj <= (err);
+						    adj <= (err <<< `FINE_ERROR_SCALE);
 						  else
 						    adj <= (err <<< 4) - err;
                     state <= CALCULATE_OUTPUT_VALUE;

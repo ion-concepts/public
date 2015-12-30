@@ -2,6 +2,14 @@
 // Copyright 2013-2014 Ettus Research
 //
 
+// Define this if you wish to replace the default E310 CODEC I/O with
+// a Znyq ported version of the B210 CODEC I/O which has no MIMO bugs.
+`define NEW_E300_IO
+
+// Define this to replace the stck E310 DPLL with a modified version
+// of the B200mini DPLL.
+`define NEW_E300_DPLL
+
 module e300
 #(parameter STREAMS_WIDTH = 4,
   parameter CMDFIFO_DEPTH = 5,
@@ -482,7 +490,8 @@ module e300
   wire mimo;
   wire codec_arst;
   wire [31:0] rx_data0, rx_data1, tx_data0, tx_data1;
-/* -----\/----- EXCLUDED -----\/-----
+
+   `ifndef NEW_E300_IO
 
   catcodec_ddr_cmos #(
     .DEVICE("7SERIES"))
@@ -500,7 +509,9 @@ module e300
     .tx_clk(CAT_FB_CLK),
     .tx_frame(CAT_TX_FRAME),
     .tx_d(CAT_P1_D));
- -----/\----- EXCLUDED -----/\----- */
+   
+   `else // !`ifndef NEW_E300_IO
+   
    e300_io e300_io_i0
      (
       .mimo(mimo),
@@ -525,6 +536,7 @@ module e300
       .tx_frame(CAT_TX_FRAME),
       .tx_data(CAT_P1_D)
       );
+   `endif // !`ifndef NEW_E300_IO
    
    assign     {rx_data0[19:16],rx_data0[3:0],rx_data1[19:16],rx_data1[3:0]} = 16'h0;
    
@@ -676,6 +688,51 @@ module e300
    */
 
   wire is_10meg, is_pps, reflck, plllck; // reference status bits
+
+   // Instantiate either stock E310 DPLL or modified version of B200mini DPLL.
+   
+   `ifdef NEW_E300_DPLL
+   
+/* -----\/----- EXCLUDED -----\/-----
+   e300_clk_gen gen_clks
+    (
+     .CLK_IN1_40(clk_tcxo), // No differential input!
+     .CLK_OUT1_40_int(int_40mhz),  .CLK_OUT2_200_ref_pll(ref_pll_clk),
+     .RESET(1'b0), .LOCKED(locked)
+     );
+ -----/\----- EXCLUDED -----/\----- */
+
+   
+  PLLE2_ADV #(.BANDWIDTH("OPTIMIZED"), .COMPENSATION("INTERNAL"),
+     .DIVCLK_DIVIDE(1),
+     .CLKFBOUT_MULT(30),
+     .CLKOUT0_DIVIDE(6),
+     .CLKOUT1_DIVIDE(30),
+     .CLKIN1_PERIOD(25.0)
+   )
+   clkgen (
+      .PWRDWN(1'b0), .RST(1'b0),
+      .CLKIN1(clk_tcxo),
+      .CLKOUT0(ref_pll_clk),
+      .CLKOUT1(int_40mhz),
+      .LOCKED(locked)
+   );
+
+   
+   e300_ref_pll ref_pll
+	(
+      .reset(1'b0),
+      .clk(ref_pll_clk), 
+      .refclk(int_40mhz),
+//      .ref(ext_ref),
+      .ref(PPS_EXT_IN), 
+      .locked(plllck),
+      .sclk(TCXO_DAC_SCLK),
+      .mosi(TCXO_DAC_SDIN),
+      .sync_n(TCXO_DAC_SYNCn)
+     // .debug(debug_pll)
+      );
+   `else
   ppsloop ppslp
   (
     .reset(1'b0),
@@ -686,6 +743,7 @@ module e300
     .sclk(TCXO_DAC_SCLK), .mosi(TCXO_DAC_SDIN), .sync_n(TCXO_DAC_SYNCn),
     .dac_dflt(16'h7fff)
   );
+   `endif
   reg [3:0] tcxo_status, st_rsync;
   always @(posedge bus_clk) begin
     /* status signals originate from other than the bus_clk domain so re-sync

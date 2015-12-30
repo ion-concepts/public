@@ -590,11 +590,11 @@ module e300_io
 	  rx_q_del[11:0] <= rx_q[11:0];
        end
        else begin
-	  // Deal with the fact that Ch A and Ch B are labelled in silkscreen opposite to their documentation in AD9361.
-	  rx_i0_siso[11:0] <= rx_i[11:0];
-	  rx_q0_siso[11:0] <= rx_q[11:0];
-	  rx_i1_siso[11:0] <= rx_i_del[11:0];
-	  rx_q1_siso[11:0] <= rx_q_del[11:0];
+	  // AD9361 map correctly to labeled connectors on E310 (unlike B200).
+	  rx_i1_siso[11:0] <= rx_i[11:0];
+	  rx_q1_siso[11:0] <= rx_q[11:0];
+	  rx_i0_siso[11:0] <= rx_i_del[11:0];
+	  rx_q0_siso[11:0] <= rx_q_del[11:0];
        end
      else begin
 	rx_i0_siso[11:0] <= rx_i[11:0];
@@ -722,13 +722,12 @@ module e300_io
    wire [11:0] tx_qm = (mimo_sync ||  tx_q0 != 12'h0) ? tx_q0 : tx_q1;
 
 
-   // Deal with the fact that Ch A and Ch B are labelled in silkscreen opposite to their documentation in AD9361.
-   // (Except on B200 based on AD9364 where only the true Ch A is stuffed)
+   // Ch A and Ch B are correctly labelled in silkscreen w.r.t AD9361 on E310
    always @(posedge siso_clk2)
      if(tx_strobe)
        begin
-	  {tx_i,tx_q} <= mimo_sync ? {tx_i1,tx_q1} : {tx_im,tx_qm};
-	  {tx_i_del,tx_q_del} <= {tx_i0,tx_q0};
+	  {tx_i,tx_q} <= mimo_sync ? {tx_i0,tx_q0} : {tx_im,tx_qm};
+	  {tx_i_del,tx_q_del} <= {tx_i1,tx_q1};
        end
      else
        {tx_i,tx_q} <= {tx_i_del,tx_q_del};

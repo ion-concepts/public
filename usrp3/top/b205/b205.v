@@ -148,14 +148,15 @@ module b205 (
     wire ext_ref = ext_ref_is_pps ? PPS_IN : ref_sel ? CLKIN_10MHz : 1'b0;
    //IJB
    wire [3:0] debug_pll;
-`define E300_PLL
+//`define E300_PLL
 `ifndef E300_PLL
    b205_ref_pll ref_pll
      (
       .reset(ref_pll_rst),
       .clk(ref_pll_clk),
       .refclk(int_40mhz),
-      .ref(ext_ref),
+//      .ref(ext_ref),
+      .ref(PPS_IN),
       .locked(ext_ref_locked),
       .sclk(CLK_40M_DAC_SCLK),
       .mosi(CLK_40M_DAC_DIN),
